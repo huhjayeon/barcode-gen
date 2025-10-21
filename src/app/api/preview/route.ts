@@ -14,12 +14,10 @@ export async function POST(request: NextRequest) {
     const svg = bwipjs.toSVG({
       ...options,
       text: contents,
+      includetext: true, // bwip-js 내장 텍스트 사용
     });
 
-    // SVG에 텍스트 추가 (OCR-B 폰트, letter-spacing -0.025em)
-    const svgWithText = addHumanReadableText(svg, contents);
-
-    return new NextResponse(svgWithText, {
+    return new NextResponse(svg, {
       headers: {
         'Content-Type': 'image/svg+xml',
       },

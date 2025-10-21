@@ -162,8 +162,9 @@ export function getBarcodeOptions(
   const baseOptions = {
     scale: 3,
     height: 15, // mm
-    includetext: false, // 우리가 별도로 텍스트 렌더링
+    includetext: true, // bwip-js 내장 텍스트 사용
     textxalign: 'center',
+    textsize: 10,
   };
 
   // 심볼로지별 특수 설정

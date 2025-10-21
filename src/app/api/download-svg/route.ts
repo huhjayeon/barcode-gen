@@ -14,14 +14,12 @@ export async function POST(request: NextRequest) {
     const svg = bwipjs.toSVG({
       ...options,
       text: contents,
+      includetext: true, // bwip-js 내장 텍스트 사용
     });
-
-    // SVG에 텍스트 추가
-    const svgWithText = addHumanReadableText(svg, contents);
 
     const filename = `barcode_${symbology}_${contents}.svg`;
 
-    return new NextResponse(svgWithText, {
+    return new NextResponse(svg, {
       headers: {
         'Content-Type': 'image/svg+xml',
         'Content-Disposition': `attachment; filename="${filename}"`,
