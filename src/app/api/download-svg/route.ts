@@ -40,29 +40,33 @@ export async function POST(request: NextRequest) {
 }
 
 function addHumanReadableText(svg: string, text: string): string {
-  const viewBoxMatch = svg.match(/viewBox="([^"]+)"/);
-  const widthMatch = svg.match(/width="([^"]+)"/);
-  const heightMatch = svg.match(/height="([^"]+)"/);
-  
-  if (!viewBoxMatch || !widthMatch || !heightMatch) return svg;
+  try {
+    const widthMatch = svg.match(/width="([^"]+)"/);
+    const heightMatch = svg.match(/height="([^"]+)"/);
+    
+    if (!widthMatch || !heightMatch) {
+      return svg;
+    }
 
-  const viewBoxParts = viewBoxMatch[1].split(' ').map(Number);
-  const viewBoxWidth = viewBoxParts[2] || parseFloat(widthMatch[1]);
-  const viewBoxHeight = viewBoxParts[3] || parseFloat(heightMatch[1]);
+    const width = parseFloat(widthMatch[1]);
+    const height = parseFloat(heightMatch[1]);
 
-  const textY = viewBoxHeight + 15;
-  const textX = viewBoxWidth / 2;
+    const textY = height + 15;
+    const textX = width / 2;
 
-  const textElement = `<text x="${textX}" y="${textY}" font-family="OCR-B, OCRB, monospace" font-size="12" text-anchor="middle" letter-spacing="-0.025em" style="font-feature-settings: 'lnum', 'tnum';" fill="#000000">${text}</text>`;
+    const textElement = `
+  <text x="${textX}" y="${textY}" font-family="OCR-B, OCRB, monospace" font-size="12" text-anchor="middle" letter-spacing="-0.025em" style="font-feature-settings: 'lnum', 'tnum';" fill="#000000">${text}</text>`;
 
-  const newHeight = viewBoxHeight + 25;
-  const newViewBox = `0 0 ${viewBoxWidth} ${newHeight}`;
+    const newHeight = height + 25;
 
-  const modifiedSvg = svg
-    .replace(/viewBox="[^"]*"/, `viewBox="${newViewBox}"`)
-    .replace(/height="[^"]*"/, `height="${newHeight}"`)
-    .replace('</svg>', `${textElement}</svg>`);
+    const modifiedSvg = svg
+      .replace(/height="[^"]*"/, `height="${newHeight}"`)
+      .replace('</svg>', `${textElement}</svg>`);
 
-  return modifiedSvg;
+    return modifiedSvg;
+  } catch (error) {
+    console.error('Error adding text to SVG:', error);
+    return svg;
+  }
 }
 
