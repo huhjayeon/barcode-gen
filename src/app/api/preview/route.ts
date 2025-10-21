@@ -38,39 +38,30 @@ export async function POST(request: NextRequest) {
 
 function addHumanReadableText(svg: string, text: string): string {
   // SVG 파싱 및 텍스트 추가
-  // SVG의 viewBox를 확인하고 하단에 텍스트 추가
   const viewBoxMatch = svg.match(/viewBox="([^"]+)"/);
-  if (!viewBoxMatch) return svg;
+  const widthMatch = svg.match(/width="([^"]+)"/);
+  const heightMatch = svg.match(/height="([^"]+)"/);
+  
+  if (!viewBoxMatch || !widthMatch || !heightMatch) return svg;
 
-  const [, , , width, height] = viewBoxMatch[1].split(' ').map(Number);
+  const viewBoxParts = viewBoxMatch[1].split(' ').map(Number);
+  const viewBoxWidth = viewBoxParts[2] || parseFloat(widthMatch[1]);
+  const viewBoxHeight = viewBoxParts[3] || parseFloat(heightMatch[1]);
 
-  // 기존 SVG를 그룹으로 감싸고 텍스트 추가
-  const textY = height + 20; // 바코드 아래 20pt 위치
-  const textX = width / 2;
+  // 텍스트 위치 계산
+  const textY = viewBoxHeight + 15;
+  const textX = viewBoxWidth / 2;
 
-  const textElement = `
-  <text 
-    x="${textX}" 
-    y="${textY}" 
-    font-family="OCR-B, OCRB, monospace" 
-    font-size="14" 
-    text-anchor="middle"
-    letter-spacing="-0.025em"
-    style="font-feature-settings: 'lnum', 'tnum';"
-  >${text}</text>`;
+  const textElement = `<text x="${textX}" y="${textY}" font-family="OCR-B, OCRB, monospace" font-size="12" text-anchor="middle" letter-spacing="-0.025em" style="font-feature-settings: 'lnum', 'tnum';" fill="#000000">${text}</text>`;
 
   // SVG 높이 확장
-  const newHeight = height + 30;
+  const newHeight = viewBoxHeight + 25;
+  const newViewBox = `0 0 ${viewBoxWidth} ${newHeight}`;
+
   const modifiedSvg = svg
-    .replace(
-      /viewBox="([^"]+)"/,
-      `viewBox="0 0 ${width} ${newHeight}"`
-    )
-    .replace(
-      /height="([^"]+)"/,
-      `height="${newHeight}"`
-    )
-    .replace('</svg>', `${textElement}\n</svg>`);
+    .replace(/viewBox="[^"]*"/, `viewBox="${newViewBox}"`)
+    .replace(/height="[^"]*"/, `height="${newHeight}"`)
+    .replace('</svg>', `${textElement}</svg>`);
 
   return modifiedSvg;
 }
