@@ -15,3 +15,14 @@ body {
   min-height: 100vh;
 }
 
+.barcode-preview {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.barcode-preview svg {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+

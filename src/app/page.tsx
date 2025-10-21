@@ -226,7 +226,7 @@ export default function Home() {
         {svgPreview && (
           <div className="mb-8">
             <h2 className="text-xl font-semibold mb-4 text-gray-800">미리보기</h2>
-            <div className="bg-gray-50 p-8 rounded-lg border border-gray-200 flex justify-center items-center">
+            <div className="bg-gray-50 p-8 rounded-lg border border-gray-200 flex justify-center items-center overflow-x-auto">
               <div
                 dangerouslySetInnerHTML={{ __html: svgPreview }}
                 className="barcode-preview"
