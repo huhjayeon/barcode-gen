@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { validateBarcodeInput, type Symbology } from '@/lib/barcode-utils';
 
 export default function Home() {
-  const [contents, setContents] = useState('880123456789');
+  const [contents, setContents] = useState('8809560223070');
   const [symbology, setSymbology] = useState<Symbology>('ean13');
   const [quietZone, setQuietZone] = useState(10);
   const [svgPreview, setSvgPreview] = useState('');
