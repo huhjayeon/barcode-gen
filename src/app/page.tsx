@@ -45,10 +45,13 @@ export default function Home() {
       }
 
       const svgText = await response.text();
+      console.log('SVG Preview received:', svgText.substring(0, 100));
       setSvgPreview(svgText);
 
       if (validation.message) {
         setSuccess(validation.message);
+      } else {
+        setSuccess('바코드가 생성되었습니다.');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '바코드 생성에 실패했습니다.');
@@ -225,11 +228,17 @@ export default function Home() {
         {/* 미리보기 */}
         {svgPreview && (
           <div className="mb-8">
-            <h2 className="text-xl font-semibold mb-4 text-gray-800">미리보기</h2>
-            <div className="bg-gray-50 p-8 rounded-lg border border-gray-200 flex justify-center items-center overflow-x-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold text-gray-800">미리보기</h2>
+              <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+                폰트: bwip-js 내장 (OCR-B 스타일)
+              </span>
+            </div>
+            <div className="bg-white p-8 rounded-lg border-2 border-gray-300 flex justify-center items-center overflow-x-auto min-h-[200px]">
               <div
                 dangerouslySetInnerHTML={{ __html: svgPreview }}
                 className="barcode-preview"
+                style={{ display: 'block', width: 'auto', height: 'auto' }}
               />
             </div>
 

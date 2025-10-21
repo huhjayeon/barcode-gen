@@ -163,6 +163,7 @@ export function getBarcodeOptions(
     scale: 3,
     height: 15, // mm
     includetext: true, // bwip-js 내장 텍스트 사용
+    textfont: 'OCRB', // OCR-B 폰트 지정
     textxalign: 'center',
     textsize: 10,
   };
