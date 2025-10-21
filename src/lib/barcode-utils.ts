@@ -77,14 +77,16 @@ export function validateBarcodeInput(
           message: 'EAN-13은 12자리 또는 13자리 숫자만 입력 가능합니다.',
         };
       }
-      if (contents.length === 12) {
-        return {
-          valid: true,
-          processedContents: calculateEAN13CheckDigit(contents),
-          message: '체크디지트가 자동으로 추가되었습니다.',
-        };
-      }
-      return { valid: true, processedContents: contents };
+      // 12자리든 13자리든 앞 12자리로 체크디지트 재계산
+      const base12 = contents.slice(0, 12);
+      const correctEan13 = calculateEAN13CheckDigit(base12);
+      return {
+        valid: true,
+        processedContents: correctEan13,
+        message: contents.length === 13 
+          ? '체크디지트가 자동으로 재계산되었습니다.' 
+          : '체크디지트가 자동으로 추가되었습니다.',
+      };
 
     case 'ean8':
       // 7자리 또는 8자리 숫자만 허용
@@ -94,14 +96,16 @@ export function validateBarcodeInput(
           message: 'EAN-8은 7자리 또는 8자리 숫자만 입력 가능합니다.',
         };
       }
-      if (contents.length === 7) {
-        return {
-          valid: true,
-          processedContents: calculateEAN8CheckDigit(contents),
-          message: '체크디지트가 자동으로 추가되었습니다.',
-        };
-      }
-      return { valid: true, processedContents: contents };
+      // 7자리든 8자리든 앞 7자리로 체크디지트 재계산
+      const base7 = contents.slice(0, 7);
+      const correctEan8 = calculateEAN8CheckDigit(base7);
+      return {
+        valid: true,
+        processedContents: correctEan8,
+        message: contents.length === 8 
+          ? '체크디지트가 자동으로 재계산되었습니다.' 
+          : '체크디지트가 자동으로 추가되었습니다.',
+      };
 
     case 'upca':
       // 11자리 또는 12자리 숫자만 허용
@@ -111,14 +115,16 @@ export function validateBarcodeInput(
           message: 'UPC-A는 11자리 또는 12자리 숫자만 입력 가능합니다.',
         };
       }
-      if (contents.length === 11) {
-        return {
-          valid: true,
-          processedContents: calculateUPCACheckDigit(contents),
-          message: '체크디지트가 자동으로 추가되었습니다.',
-        };
-      }
-      return { valid: true, processedContents: contents };
+      // 11자리든 12자리든 앞 11자리로 체크디지트 재계산
+      const base11 = contents.slice(0, 11);
+      const correctUpca = calculateUPCACheckDigit(base11);
+      return {
+        valid: true,
+        processedContents: correctUpca,
+        message: contents.length === 12 
+          ? '체크디지트가 자동으로 재계산되었습니다.' 
+          : '체크디지트가 자동으로 추가되었습니다.',
+      };
 
     case 'code128':
       // Code128은 알파벳, 숫자 모두 허용
