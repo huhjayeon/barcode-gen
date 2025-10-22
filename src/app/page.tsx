@@ -193,7 +193,7 @@ export default function Home() {
     <main className="min-h-screen flex flex-col items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-4xl w-full">
         <h1 className="text-4xl font-bold text-center mb-8 text-gray-800">
-          Free Barcode Generator (.AI)
+          Barcode Generator For Baco
         </h1>
 
         {/* 입력 폼 */}
