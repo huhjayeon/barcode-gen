@@ -9,8 +9,8 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "bwip-js": "^4.5.1",
-    "canvas": "^3.2.0",
     "iconv-lite": "^0.6.3",
     "jspdf": "^3.0.3",
     "next": "14.2.18",
