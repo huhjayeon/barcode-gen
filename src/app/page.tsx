@@ -99,52 +99,6 @@ export default function Home() {
     }
   };
 
-  const handleDownloadAI = async () => {
-    if (!svgPreview) {
-      setError('먼저 바코드를 생성해주세요.');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const response = await fetch('/api/download-ai', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: processedContents || contents,
-          symbology,
-          quietZone,
-          fontSize,
-          offsetLeft,
-          offsetMiddle,
-          offsetRight,
-          offsetBoxLeft,
-          offsetBoxMiddle,
-          offsetBoxRight,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('AI 파일 다운로드에 실패했습니다.');
-      }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `barcode_${symbology}_${processedContents || contents}.ai`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-      setSuccess('AI 파일 다운로드 완료!');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'AI 파일 다운로드에 실패했습니다.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleDownloadSVG = async () => {
     if (!svgPreview) {
       setError('먼저 바코드를 생성해주세요.');
@@ -487,20 +441,13 @@ export default function Home() {
             </div>
 
             {/* 다운로드 버튼 */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-              <button
-                onClick={handleDownloadAI}
-                disabled={loading}
-                className="bg-gradient-to-r from-pink-600 to-purple-600 text-white py-3 px-6 rounded-lg font-semibold hover:from-pink-700 hover:to-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
-              >
-                🎨 .AI 다운로드 (일러스트레이터 편집용)
-              </button>
+            <div className="mt-6">
               <button
                 onClick={handleDownloadSVG}
                 disabled={loading}
-                className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white py-3 px-6 rounded-lg font-semibold hover:from-blue-700 hover:to-cyan-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+                className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 text-white py-3 px-6 rounded-lg font-semibold hover:from-blue-700 hover:to-cyan-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
               >
-                📥 .SVG 다운로드 (웹용)
+                📥 SVG 다운로드 (일러스트레이터 편집용)
               </button>
             </div>
           </div>
