@@ -19,6 +19,9 @@ export async function POST(request: NextRequest) {
 
     // SVG에 명시적인 width와 height 추가
     svg = addSVGDimensions(svg);
+    
+    // SVG에 폰트 스타일 추가
+    svg = addFontStyle(svg);
 
     // EAN-13, EAN-8, UPC-A의 경우 표준 레이아웃으로 텍스트 + 흰색 박스 추가
     if (symbology === 'ean13' || symbology === 'ean8' || symbology === 'upca') {
@@ -66,6 +69,32 @@ function addSVGDimensions(svg: string): string {
     return svg;
   } catch (error) {
     console.error('Error adding SVG dimensions:', error);
+    return svg;
+  }
+}
+
+/**
+ * SVG에 OCR-B 폰트 스타일 추가
+ */
+function addFontStyle(svg: string): string {
+  try {
+    const fontStyle = `
+  <defs>
+    <style type="text/css">
+      @font-face {
+        font-family: 'OCR-B';
+        src: url('/fonts/ocrb/ocr-b-10-bt.ttf') format('truetype');
+        font-weight: normal;
+        font-style: normal;
+      }
+    </style>
+  </defs>`;
+    
+    // <svg> 태그 직후에 스타일 삽입
+    svg = svg.replace(/<svg ([^>]*)>/, `<svg $1>${fontStyle}`);
+    return svg;
+  } catch (error) {
+    console.error('Error adding font style:', error);
     return svg;
   }
 }
