@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import bwipjs from 'bwip-js';
 import { BarcodeRequestSchema } from '@/lib/validation';
 import { getBarcodeOptions } from '@/lib/barcode-utils';
-import { Resvg } from '@resvg/resvg-js';
-import { jsPDF } from 'jspdf';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -24,7 +22,7 @@ export async function POST(request: NextRequest) {
     // SVG에 명시적인 width와 height 추가
     svg = addSVGDimensions(svg);
     
-    // SVG에 폰트 스타일 추가
+    // SVG에 폰트 스타일 추가 (base64 임베드)
     svg = addFontStyle(svg);
 
     // EAN-13, EAN-8, UPC-A의 경우 표준 레이아웃으로 텍스트 + 흰색 박스 추가
@@ -35,58 +33,12 @@ export async function POST(request: NextRequest) {
       svg = addCenterText(svg, contents, fontSize);
     }
 
-    // SVG를 PNG로 변환 (고해상도)
-    const fontPath = path.join(process.cwd(), 'public', 'fonts', 'ocrb', 'ocr-b-10-bt.ttf');
-    const resvg = new Resvg(svg, {
-      fitTo: {
-        mode: 'width',
-        value: 2400, // 고해상도
-      },
-      font: {
-        fontFiles: [fontPath],
-        loadSystemFonts: false,
-        defaultFontFamily: 'OCR-B',
-      },
-    });
-    const pngData = resvg.render();
-    const pngBuffer = pngData.asPng();
-
-    // PNG 크기 계산
-    const width = resvg.width;
-    const height = resvg.height;
-
-    // PDF 생성
-    const pdf = new jsPDF({
-      orientation: width > height ? 'landscape' : 'portrait',
-      unit: 'mm',
-      format: 'a4',
-    });
-
-    // A4 크기 계산
-    const pdfWidth = width > height ? 297 : 210;
-    const pdfHeight = width > height ? 210 : 297;
-    
-    // 이미지를 A4에 맞게 조정 (여백 포함)
-    const maxWidth = pdfWidth - 20; // 좌우 여백 10mm
-    const maxHeight = pdfHeight - 20; // 상하 여백 10mm
-    
-    const ratio = Math.min(maxWidth / (width / 10), maxHeight / (height / 10)); // 픽셀을 mm로 변환
-    const imgWidth = (width / 10) * ratio;
-    const imgHeight = (height / 10) * ratio;
-    
-    const x = (pdfWidth - imgWidth) / 2;
-    const y = (pdfHeight - imgHeight) / 2;
-
-    // PNG를 base64로 변환하여 PDF에 추가
-    const base64Image = `data:image/png;base64,${pngBuffer.toString('base64')}`;
-    pdf.addImage(base64Image, 'PNG', x, y, imgWidth, imgHeight);
-
-    const pdfBuffer = Buffer.from(pdf.output('arraybuffer'));
+    // SVG를 그대로 .ai로 제공 (일러스트레이터에서 벡터로 편집 가능)
     const filename = `barcode_${symbology}_${contents}.ai`;
 
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(svg, {
       headers: {
-        'Content-Type': 'application/pdf',
+        'Content-Type': 'image/svg+xml',
         'Content-Disposition': `attachment; filename="${filename}"`,
         'Cache-Control': 'no-cache',
       },
