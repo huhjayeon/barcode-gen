@@ -4,7 +4,7 @@
 
 @font-face {
   font-family: 'OCR-B';
-  src: url('/fonts/ocrb/OCRB10BT.ttf') format('truetype');
+  src: url('/fonts/ocrb/ocr-b-10-bt.ttf') format('truetype');
   font-weight: normal;
   font-style: normal;
   font-display: swap;
@@ -16,14 +16,18 @@ body {
 }
 
 .barcode-preview {
-  display: inline-block;
-  max-width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  min-height: 150px;
 }
 
 .barcode-preview svg {
   display: block;
+  width: auto !important;
+  height: auto !important;
   max-width: 100%;
-  height: auto;
-  margin: 0 auto;
+  max-height: 300px;
 }
 

@@ -1,109 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bwipjs from 'bwip-js';
-import PDFDocument from 'pdfkit';
-import SVGtoPDF from 'svg-to-pdfkit';
 import { BarcodeRequestSchema } from '@/lib/validation';
 import { getBarcodeOptions } from '@/lib/barcode-utils';
-import * as fs from 'fs';
-import * as path from 'path';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { contents, symbology, quietZone } = BarcodeRequestSchema.parse(body);
+    const { contents, symbology, quietZone, fontSize, offsetLeft, offsetMiddle, offsetRight, offsetBoxLeft, offsetBoxMiddle, offsetBoxRight } = BarcodeRequestSchema.parse(body);
 
     const options = getBarcodeOptions(symbology, quietZone);
 
-    // bwip-js로 SVG 생성 (텍스트 없이)
-    const svg = bwipjs.toSVG({
+    // bwip-js로 SVG 생성 (바코드만, 텍스트 제외)
+    let svg = bwipjs.toSVG({
       ...options,
       text: contents,
+      includetext: false,
     });
 
-    // PDF 생성 (600x300 pt)
-    const doc = new PDFDocument({
-      size: [600, 300],
-      margin: 0,
-    });
+    // SVG에 명시적인 width와 height 추가
+    svg = addSVGDimensions(svg);
 
-    const chunks: Buffer[] = [];
-    doc.on('data', (chunk) => chunks.push(chunk));
-
-    // SVG를 PDF에 삽입
-    const svgElement = parseSVG(svg);
-    if (svgElement) {
-      // 중앙 배치 계산
-      const barcodeWidth = svgElement.width || 400;
-      const barcodeHeight = svgElement.height || 200;
-      const x = (600 - barcodeWidth) / 2;
-      const y = 50; // 상단에서 50pt
-
-      SVGtoPDF(doc, svg, x, y, {
-        width: barcodeWidth,
-        height: barcodeHeight,
-        preserveAspectRatio: 'xMidYMid meet',
-      });
-    }
-
-    // Human-readable text 추가 (OCR-B 폰트)
-    const fontPath = path.join(
-      process.cwd(),
-      'public',
-      'fonts',
-      'ocrb',
-      'OCRB10BT.ttf'
-    );
-
-    let fontNotice = '';
-    if (fs.existsSync(fontPath)) {
-      doc.font(fontPath);
+    // EAN-13, EAN-8, UPC-A의 경우 표준 레이아웃으로 텍스트 + 흰색 박스 추가
+    if (symbology === 'ean13' || symbology === 'ean8' || symbology === 'upca') {
+      svg = addEANText(svg, contents, symbology, fontSize, offsetLeft, offsetMiddle, offsetRight, offsetBoxLeft, offsetBoxMiddle, offsetBoxRight);
     } else {
-      // 폰트 없으면 시스템 기본 폰트 사용
-      doc.font('Courier');
-      fontNotice = 'Missing OCRB font, using fallback';
+      // 다른 심볼로지는 중앙 하단에 텍스트 추가
+      svg = addCenterText(svg, contents, fontSize);
     }
-
-    doc.fontSize(14);
-
-    // 텍스트 중앙 정렬 (letter-spacing 적용)
-    const textWidth = doc.widthOfString(contents);
-    const textX = (600 - textWidth) / 2;
-    const textY = 250; // 하단에 배치
-
-    // letter-spacing 시뮬레이션 (각 문자를 개별 렌더)
-    const letterSpacing = -0.025; // -25/1000em
-    let currentX = textX;
-
-    for (let i = 0; i < contents.length; i++) {
-      const char = contents[i];
-      doc.text(char, currentX, textY, {
-        lineBreak: false,
-      });
-      const charWidth = doc.widthOfString(char);
-      currentX += charWidth + charWidth * letterSpacing;
-    }
-
-    doc.end();
-
-    // PDF 버퍼 생성 대기
-    const pdfBuffer = await new Promise<Buffer>((resolve) => {
-      doc.on('end', () => {
-        resolve(Buffer.concat(chunks));
-      });
-    });
 
     const filename = `barcode_${symbology}_${contents}.ai`;
 
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename="${filename}"`,
-    };
-
-    if (fontNotice) {
-      headers['X-Font-Notice'] = fontNotice;
-    }
-
-    return new NextResponse(new Uint8Array(pdfBuffer), { headers });
+    // SVG를 .ai 확장자로 제공 (Illustrator가 SVG를 네이티브로 열 수 있음)
+    return new NextResponse(svg, {
+      headers: {
+        'Content-Type': 'image/svg+xml',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+      },
+    });
   } catch (error) {
     console.error('AI download error:', error);
     return NextResponse.json(
@@ -116,15 +49,144 @@ export async function POST(request: NextRequest) {
   }
 }
 
-function parseSVG(svg: string): { width?: number; height?: number } | null {
-  const widthMatch = svg.match(/width="([^"]+)"/);
-  const heightMatch = svg.match(/height="([^"]+)"/);
+function addSVGDimensions(svg: string): string {
+  try {
+    const viewBoxMatch = svg.match(/viewBox="([^"]+)"/);
+    if (!viewBoxMatch) return svg;
 
-  if (!widthMatch || !heightMatch) return null;
+    const viewBoxValues = viewBoxMatch[1].split(' ');
+    const width = parseFloat(viewBoxValues[2]);
+    const height = parseFloat(viewBoxValues[3]);
 
-  return {
-    width: parseFloat(widthMatch[1]),
-    height: parseFloat(heightMatch[1]),
-  };
+    // width와 height 속성 추가
+    if (!svg.match(/width="/)) {
+      svg = svg.replace(/<svg /, `<svg width="${width}" height="${height}" `);
+    } else if (!svg.match(/height="/)) {
+      svg = svg.replace(/<svg /, `<svg height="${height}" `);
+    }
+
+    return svg;
+  } catch (error) {
+    console.error('Error adding SVG dimensions:', error);
+    return svg;
+  }
+}
+
+function addEANText(svg: string, text: string, symbology: string, fontSize: number = 16, offsetLeft: number = 0, offsetMiddle: number = 0, offsetRight: number = 0, offsetBoxLeft: number = 0, offsetBoxMiddle: number = 0, offsetBoxRight: number = 0): string {
+  try {
+    const widthMatch = svg.match(/width="([^"]+)"/);
+    const heightMatch = svg.match(/height="([^"]+)"/);
+    const viewBoxMatch = svg.match(/viewBox="([^"]+)"/);
+    
+    if (!widthMatch || !heightMatch || !viewBoxMatch) {
+      return svg;
+    }
+
+    const width = parseFloat(widthMatch[1]);
+    const height = parseFloat(heightMatch[1]);
+    const viewBoxValues = viewBoxMatch[1].split(' ');
+    const vbWidth = parseFloat(viewBoxValues[2]);
+    const vbHeight = parseFloat(viewBoxValues[3]);
+
+    let elements = '';
+    const textY = vbHeight - 2;
+    const paddingX = 5;
+    const paddingY = 0;
+    
+    const newHeight = vbHeight + 10;
+
+    if (symbology === 'ean13') {
+      const firstDigit = text[0];
+      const leftGroup = text.substring(1, 7);
+      const rightGroup = text.substring(7, 13);
+
+      const charSpacing = vbWidth * 0.051;
+      
+      const firstDigitX = vbWidth * 0.06 + (-16) + offsetLeft;
+      const firstDigitWidth = (fontSize - 1) * 0.6;
+      const firstDigitBoxX = firstDigitX - paddingX + offsetBoxLeft;
+      const firstDigitBoxY = textY - fontSize - paddingY;
+      const firstDigitBoxWidth = firstDigitWidth + paddingX * 2;
+      const firstDigitBoxHeight = fontSize + paddingY * 2;
+      
+      elements += `<rect x="${firstDigitBoxX}" y="${firstDigitBoxY}" width="${firstDigitBoxWidth}" height="${firstDigitBoxHeight}" fill="white" stroke="none"/>`;
+      elements += `<text x="${firstDigitX}" y="${textY}" font-family="OCR-B, OCRB, 'OCR B', monospace" font-size="${fontSize - 1}" text-anchor="start" fill="#000000">${firstDigit}</text>`;
+
+      const leftGroupStartX = vbWidth * 0.165 + 3.5 + offsetMiddle;
+      const leftGroupBoxWidth = 120;
+      const leftGroupBoxHeight = 20;
+      const leftGroupBoxX = leftGroupStartX - leftGroupBoxWidth / 2 + 44 + offsetBoxMiddle;
+      const leftGroupBoxY = textY - 27;
+      
+      elements += `<rect x="${leftGroupBoxX}" y="${leftGroupBoxY}" width="${leftGroupBoxWidth}" height="${leftGroupBoxHeight}" fill="white" stroke="none"/>`;
+      
+      for (let i = 0; i < leftGroup.length; i++) {
+        elements += `<text x="${leftGroupStartX + i * charSpacing}" y="${textY}" font-family="OCR-B, OCRB, 'OCR B', monospace" font-size="${fontSize}" text-anchor="middle" fill="#000000">${leftGroup[i]}</text>`;
+      }
+
+      const rightGroupStartX = vbWidth * 0.545 + 5 + offsetRight;
+      const rightGroupBoxWidth = 120;
+      const rightGroupBoxHeight = 20;
+      const rightGroupBoxX = rightGroupStartX - rightGroupBoxWidth / 2 + 43.5 + offsetBoxRight;
+      const rightGroupBoxY = textY - 27;
+      
+      elements += `<rect x="${rightGroupBoxX}" y="${rightGroupBoxY}" width="${rightGroupBoxWidth}" height="${rightGroupBoxHeight}" fill="white" stroke="none"/>`;
+      
+      for (let i = 0; i < rightGroup.length; i++) {
+        elements += `<text x="${rightGroupStartX + i * charSpacing}" y="${textY}" font-family="OCR-B, OCRB, 'OCR B', monospace" font-size="${fontSize}" text-anchor="middle" fill="#000000">${rightGroup[i]}</text>`;
+      }
+    }
+
+    let modifiedSvg = svg.replace(
+      /viewBox="([^"]+)"/,
+      `viewBox="${viewBoxValues[0]} ${viewBoxValues[1]} ${vbWidth} ${newHeight}"`
+    );
+    modifiedSvg = modifiedSvg.replace(
+      /height="[^"]+"/,
+      `height="${newHeight}"`
+    );
+    modifiedSvg = modifiedSvg.replace('</svg>', `${elements}\n</svg>`);
+    return modifiedSvg;
+  } catch (error) {
+    console.error('Error adding EAN text:', error);
+    return svg;
+  }
+}
+
+function addCenterText(svg: string, text: string, fontSize: number = 16): string {
+  try {
+    const widthMatch = svg.match(/width="([^"]+)"/);
+    const heightMatch = svg.match(/height="([^"]+)"/);
+    const viewBoxMatch = svg.match(/viewBox="([^"]+)"/);
+    
+    if (!widthMatch || !heightMatch || !viewBoxMatch) {
+      return svg;
+    }
+
+    const viewBoxValues = viewBoxMatch[1].split(' ');
+    const vbWidth = parseFloat(viewBoxValues[2]);
+    const vbHeight = parseFloat(viewBoxValues[3]);
+
+    const textY = vbHeight - 2;
+    const textX = vbWidth / 2;
+    const newHeight = vbHeight + 10;
+
+    const textElement = `
+  <text x="${textX}" y="${textY}" font-family="OCR-B, OCRB, 'OCR B', monospace" font-size="${fontSize}" text-anchor="middle" fill="#000000">${text}</text>`;
+
+    let modifiedSvg = svg.replace(
+      /viewBox="([^"]+)"/,
+      `viewBox="${viewBoxValues[0]} ${viewBoxValues[1]} ${vbWidth} ${newHeight}"`
+    );
+    modifiedSvg = modifiedSvg.replace(
+      /height="[^"]+"/,
+      `height="${newHeight}"`
+    );
+    modifiedSvg = modifiedSvg.replace('</svg>', `${textElement}\n</svg>`);
+    return modifiedSvg;
+  } catch (error) {
+    console.error('Error adding center text:', error);
+    return svg;
+  }
 }
 

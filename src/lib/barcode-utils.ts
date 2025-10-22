@@ -163,24 +163,34 @@ export function getBarcodeOptions(
     scale: 3,
     height: 15, // mm
     includetext: true, // bwip-js 내장 텍스트 사용
-    textfont: 'OCRB', // OCR-B 폰트 지정
-    textxalign: 'center',
-    textsize: 10,
+    textfont: 'OCR-B', // OCR-B 폰트 지정 (정확한 이름)
+    textsize: 10, // 폰트 크기
+    paddingleft: quietZone,
+    paddingright: quietZone,
+    paddingtop: 5,
+    paddingbottom: 5,
   };
 
   // 심볼로지별 특수 설정
   const symbologyOptions: Record<Symbology, any> = {
     ean13: {
       bcid: 'ean13',
-      guardwhitespace: true,
+      guardwhitespace: false, // EAN-13 표준 레이아웃
+      includetext: true,
+      textxalign: 'justify', // 텍스트 정렬
+      textgaps: 0, // 텍스트 간격
     },
     ean8: {
       bcid: 'ean8',
-      guardwhitespace: true,
+      guardwhitespace: false,
+      includetext: true,
+      textxalign: 'justify',
     },
     upca: {
       bcid: 'upca',
-      guardwhitespace: true,
+      guardwhitespace: false,
+      includetext: true,
+      textxalign: 'justify',
     },
     code128: {
       bcid: 'code128',
