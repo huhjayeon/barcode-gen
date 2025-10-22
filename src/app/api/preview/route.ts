@@ -25,14 +25,12 @@ export async function POST(request: NextRequest) {
     // SVG에 폰트 스타일 추가
     svg = addFontStyle(svg);
 
-    // EAN-13의 경우 가드바 조정 및 바코드 그룹화
+    // EAN-13의 경우 처리
     if (symbology === 'ean13') {
-      svg = adjustEAN13Guards(svg);
-      svg = groupBarcodePaths(svg);
-      svg = addEAN13TextGroups(svg, contents, fontSize, offsetLeft, offsetMiddle, offsetRight);
+      // 가드바 길이 조정 + 바코드 그룹화 + 숫자 추가를 한 번에 처리
+      svg = processEAN13(svg, contents, fontSize, offsetLeft, offsetMiddle, offsetRight);
     } else {
       // 다른 심볼로지는 간단한 처리
-      svg = groupBarcodePaths(svg);
       svg = addCenterText(svg, contents, fontSize);
     }
 
@@ -124,9 +122,9 @@ function addFontStyle(svg: string): string {
 }
 
 /**
- * EAN-13 가드바의 높이를 조정하고 데이터바는 짧게 만듦
+ * EAN-13 처리: 가드바 길이 차별화 + 바코드 그룹화 + 숫자 그룹 추가
  */
-function adjustEAN13Guards(svg: string): string {
+function processEAN13(svg: string, text: string, fontSize: number = 35, offsetLeft: number = 0, offsetMiddle: number = 0, offsetRight: number = 0): string {
   try {
     const viewBoxMatch = svg.match(/viewBox="([^"]+)"/);
     if (!viewBoxMatch) return svg;
@@ -135,161 +133,107 @@ function adjustEAN13Guards(svg: string): string {
     const vbWidth = parseFloat(viewBoxValues[2]);
     const vbHeight = parseFloat(viewBoxValues[3]);
 
-    // path들을 추출
-    const pathMatches = svg.matchAll(/<path[^>]*stroke="[^"]*"[^>]*d="([^"]+)"[^>]*\/>/g);
-    let paths = [];
+    // 모든 path 추출
+    const pathMatches = Array.from(svg.matchAll(/<path[^>]*d="([^"]+)"[^>]*\/>/g));
     
-    for (const match of pathMatches) {
-      paths.push(match[0]);
-    }
-
-    // 각 path의 x 좌표를 분석하여 가드바인지 확인
-    let newPaths = paths.map(pathStr => {
-      const dMatch = pathStr.match(/d="M([0-9.]+) /);
-      if (!dMatch) return pathStr;
+    // 각 path를 분석하고 재구성
+    const newPaths: string[] = [];
+    
+    pathMatches.forEach((match) => {
+      const fullPath = match[0];
+      const dAttr = match[1];
       
-      const x = parseFloat(dMatch[1]);
-      const xRatio = x / vbWidth;
+      // M 커맨드들을 분리 (한 path에 여러 선이 있을 수 있음)
+      const lines = dAttr.split('M').filter(s => s.trim());
       
-      // 가드바 위치 (EAN-13 구조)
-      // 시작 가드: 0-0.03 (약 3%)
-      // 중앙 가드: 0.46-0.52 (약 46-52%)
-      // 끝 가드: 0.97-1.0 (약 97-100%)
-      const isGuard = 
-        xRatio < 0.05 ||  // 시작 가드
-        (xRatio > 0.45 && xRatio < 0.53) ||  // 중앙 가드
-        xRatio > 0.95;  // 끝 가드
-      
-      if (!isGuard) {
-        // 데이터바는 높이를 줄임 (상단에서 20pt 아래로)
-        const heightReduction = 20;
-        return pathStr.replace(
-          /d="M([0-9.]+) ([0-9.]+)L([0-9.]+) ([0-9.]+)"/,
-          (match, x1, y1, x2, y2) => {
-            const newY1 = parseFloat(y1) + heightReduction;
-            return `d="M${x1} ${newY1}L${x2} ${y2}"`;
-          }
-        );
-      }
-      
-      return pathStr;
+      lines.forEach(line => {
+        const coords = line.match(/([0-9.]+)\s+([0-9.]+)L([0-9.]+)\s+([0-9.]+)/);
+        if (!coords) return;
+        
+        const x1 = parseFloat(coords[1]);
+        const y1 = parseFloat(coords[2]);
+        const x2 = parseFloat(coords[3]);
+        const y2 = parseFloat(coords[4]);
+        
+        // X 위치로 가드바 판단
+        const xRatio = x1 / vbWidth;
+        const isGuard = 
+          xRatio < 0.06 ||  // 왼쪽 가드
+          (xRatio > 0.46 && xRatio < 0.54) ||  // 중앙 가드
+          xRatio > 0.94;  // 오른쪽 가드
+        
+        // 가드바가 아니면 위쪽을 20pt 짧게
+        const newY1 = isGuard ? y1 : y1 + 20;
+        
+        // stroke-width 추출
+        const widthMatch = fullPath.match(/stroke-width="([^"]+)"/);
+        const strokeWidth = widthMatch ? widthMatch[1] : '3';
+        
+        newPaths.push(`<path stroke="#000000" stroke-width="${strokeWidth}" d="M${x1} ${newY1}L${x2} ${y2}" />`);
+      });
     });
 
-    // 원래 path들을 새로운 것으로 교체
+    // 기존 paths를 모두 제거하고 그룹으로 교체
     let result = svg;
-    paths.forEach((oldPath, i) => {
-      result = result.replace(oldPath, newPaths[i]);
+    pathMatches.forEach((match) => {
+      result = result.replace(match[0], '');
     });
-
-    return result;
-  } catch (error) {
-    console.error('Error adjusting EAN13 guards:', error);
-    return svg;
-  }
-}
-
-/**
- * 모든 바코드 path를 하나의 그룹으로 묶음
- */
-function groupBarcodePaths(svg: string): string {
-  try {
-    // 모든 path를 찾아서 그룹화
-    const pathRegex = /<path[^>]*\/>/g;
-    const paths = svg.match(pathRegex) || [];
     
-    if (paths.length === 0) return svg;
-    
-    // 모든 path를 그룹으로 묶음
+    // 그룹화된 paths 추가
     const groupedPaths = `
   <g id="barcode-bars">
-    ${paths.join('\n    ')}
-  </g>`;
+${newPaths.map(p => `    ${p}`).join('\n')}
+  </g>
+`;
     
-    // 첫 번째 path를 그룹으로 교체
-    let result = svg.replace(paths[0], groupedPaths);
+    // </svg> 앞에 그룹 삽입
+    result = result.replace('</svg>', `${groupedPaths}</svg>`);
     
-    // 나머지 path들 제거
-    for (let i = 1; i < paths.length; i++) {
-      result = result.replace(paths[i], '');
-    }
-    
-    return result;
-  } catch (error) {
-    console.error('Error grouping barcode paths:', error);
-    return svg;
-  }
-}
-
-/**
- * EAN-13 텍스트를 3개 그룹으로 추가 (왼쪽 1자리, 중간 6자리, 오른쪽 6자리)
- */
-function addEAN13TextGroups(svg: string, text: string, fontSize: number = 35, offsetLeft: number = 0, offsetMiddle: number = 0, offsetRight: number = 0): string {
-  try {
-    const widthMatch = svg.match(/width="([^"]+)"/);
-    const heightMatch = svg.match(/height="([^"]+)"/);
-    const viewBoxMatch = svg.match(/viewBox="([^"]+)"/);
-    
-    if (!widthMatch || !heightMatch || !viewBoxMatch) {
-      return svg;
-    }
-
-    const viewBoxValues = viewBoxMatch[1].split(' ');
-    const vbWidth = parseFloat(viewBoxValues[2]);
-    const vbHeight = parseFloat(viewBoxValues[3]);
-
+    // 숫자 그룹 추가
     const firstDigit = text[0];
     const leftGroup = text.substring(1, 7);
     const rightGroup = text.substring(7, 13);
 
-    const charSpacing = vbWidth * 0.051;
     const textY = vbHeight - 2;
     
-    // 왼쪽 첫 번째 숫자 그룹 (1자리)
+    // 왼쪽 첫 번째 숫자 (단일 text)
     const firstDigitX = vbWidth * 0.06 + (-16) + offsetLeft;
     const firstDigitGroup = `
   <g id="first-digit">
     <text x="${firstDigitX}" y="${textY}" font-family="OCR-B, OCRB, 'OCR B', monospace" font-size="${fontSize - 1}" text-anchor="start" fill="#000000">${firstDigit}</text>
   </g>`;
 
-    // 중앙 그룹 (6자리)
+    // 중앙 그룹 (단일 text)
     const leftGroupStartX = vbWidth * 0.165 + 3.5 + offsetMiddle;
-    let leftGroupTexts = '';
-    for (let i = 0; i < leftGroup.length; i++) {
-      leftGroupTexts += `
-    <text x="${leftGroupStartX + i * charSpacing}" y="${textY}" font-family="OCR-B, OCRB, 'OCR B', monospace" font-size="${fontSize}" text-anchor="middle" fill="#000000">${leftGroup[i]}</text>`;
-    }
     const leftGroupElement = `
-  <g id="left-group">${leftGroupTexts}
+  <g id="left-group">
+    <text x="${leftGroupStartX}" y="${textY}" font-family="OCR-B, OCRB, 'OCR B', monospace" font-size="${fontSize}" letter-spacing="-0.025em" fill="#000000">${leftGroup}</text>
   </g>`;
 
-    // 오른쪽 그룹 (6자리)
+    // 오른쪽 그룹 (단일 text)
     const rightGroupStartX = vbWidth * 0.545 + 5 + offsetRight;
-    let rightGroupTexts = '';
-    for (let i = 0; i < rightGroup.length; i++) {
-      rightGroupTexts += `
-    <text x="${rightGroupStartX + i * charSpacing}" y="${textY}" font-family="OCR-B, OCRB, 'OCR B', monospace" font-size="${fontSize}" text-anchor="middle" fill="#000000">${rightGroup[i]}</text>`;
-    }
     const rightGroupElement = `
-  <g id="right-group">${rightGroupTexts}
+  <g id="right-group">
+    <text x="${rightGroupStartX}" y="${textY}" font-family="OCR-B, OCRB, 'OCR B', monospace" font-size="${fontSize}" letter-spacing="-0.025em" fill="#000000">${rightGroup}</text>
   </g>`;
 
     // viewBox 높이를 텍스트 포함하도록 확장
     const newHeight = vbHeight + 10;
-    let modifiedSvg = svg.replace(
+    result = result.replace(
       /viewBox="([^"]+)"/,
       `viewBox="${viewBoxValues[0]} ${viewBoxValues[1]} ${vbWidth} ${newHeight}"`
     );
-    modifiedSvg = modifiedSvg.replace(
+    result = result.replace(
       /height="[^"]+"/,
       `height="${newHeight}"`
     );
     
     // </svg> 앞에 텍스트 그룹 추가
-    modifiedSvg = modifiedSvg.replace('</svg>', `${firstDigitGroup}${leftGroupElement}${rightGroupElement}\n</svg>`);
+    result = result.replace('</svg>', `${firstDigitGroup}${leftGroupElement}${rightGroupElement}\n</svg>`);
     
-    return modifiedSvg;
+    return result;
   } catch (error) {
-    console.error('Error adding EAN13 text groups:', error);
+    console.error('Error processing EAN13:', error);
     return svg;
   }
 }
