@@ -33,13 +33,14 @@ export async function POST(request: NextRequest) {
       svg = addCenterText(svg, contents, fontSize);
     }
 
-    const filename = `barcode_${symbology}_${contents}.ai`;
+    const filename = `barcode_${symbology}_${contents}.svg`;
 
-    // SVG를 .ai 확장자로 제공 (Illustrator가 SVG를 네이티브로 열 수 있음)
+    // SVG 파일로 제공 (Illustrator에서 SVG를 네이티브로 열 수 있음)
     return new NextResponse(svg, {
       headers: {
-        'Content-Type': 'image/svg+xml',
+        'Content-Type': 'image/svg+xml; charset=utf-8',
         'Content-Disposition': `attachment; filename="${filename}"`,
+        'Cache-Control': 'no-cache',
       },
     });
   } catch (error) {
