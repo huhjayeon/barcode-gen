@@ -36,10 +36,16 @@ export async function POST(request: NextRequest) {
     }
 
     // SVG를 PNG로 변환 (고해상도)
+    const fontPath = path.join(process.cwd(), 'public', 'fonts', 'ocrb', 'ocr-b-10-bt.ttf');
     const resvg = new Resvg(svg, {
       fitTo: {
         mode: 'width',
         value: 2400, // 고해상도
+      },
+      font: {
+        fontFiles: [fontPath],
+        loadSystemFonts: false,
+        defaultFontFamily: 'OCR-B',
       },
     });
     const pngData = resvg.render();
