@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import bwipjs from 'bwip-js';
 import { BarcodeRequestSchema } from '@/lib/validation';
 import { getBarcodeOptions } from '@/lib/barcode-utils';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export async function POST(request: NextRequest) {
   try {
@@ -73,17 +75,56 @@ function addSVGDimensions(svg: string): string {
   }
 }
 
+// 폰트를 base64로 캐싱 (서버 시작시 한 번만 로드)
+let cachedFontBase64: string | null = null;
+
+function getFontBase64(): string {
+  if (cachedFontBase64) {
+    return cachedFontBase64;
+  }
+  
+  try {
+    const fontPath = path.join(process.cwd(), 'public', 'fonts', 'ocrb', 'ocr-b-10-bt.ttf');
+    const fontBuffer = fs.readFileSync(fontPath);
+    cachedFontBase64 = fontBuffer.toString('base64');
+    return cachedFontBase64;
+  } catch (error) {
+    console.error('Error loading font:', error);
+    return '';
+  }
+}
+
 /**
- * SVG에 OCR-B 폰트 스타일 추가
+ * SVG에 OCR-B 폰트 스타일 추가 (base64 임베드)
  */
 function addFontStyle(svg: string): string {
   try {
-    const fontStyle = `
+    const fontBase64 = getFontBase64();
+    
+    if (!fontBase64) {
+      // 폰트 로드 실패 시 fallback (상대 경로)
+      const fontStyle = `
   <defs>
     <style type="text/css">
       @font-face {
         font-family: 'OCR-B';
         src: url('/fonts/ocrb/ocr-b-10-bt.ttf') format('truetype');
+        font-weight: normal;
+        font-style: normal;
+      }
+    </style>
+  </defs>`;
+      svg = svg.replace(/<svg ([^>]*)>/, `<svg $1>${fontStyle}`);
+      return svg;
+    }
+    
+    // base64로 인코딩된 폰트를 data URI로 임베드
+    const fontStyle = `
+  <defs>
+    <style type="text/css">
+      @font-face {
+        font-family: 'OCR-B';
+        src: url(data:font/truetype;charset=utf-8;base64,${fontBase64}) format('truetype');
         font-weight: normal;
         font-style: normal;
       }
